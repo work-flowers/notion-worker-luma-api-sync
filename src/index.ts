@@ -76,31 +76,137 @@ interface ListGuestsResponse {
 // answers to unknown questions are skipped.
 // ---------------------------------------------------------------------------
 
-const AGREE_CHECK_QUESTIONS = [
-	"Stay connected: Add me to the work.flowers mailing list for ops and automation insights, plus news on upcoming events.",
-] as const;
+interface QuestionConfig {
+	/** Luma question label, matched against registration_answers[].label */
+	label: string;
+	/** Trimmed Notion property name */
+	property: string;
+	kind: "text" | "email" | "select" | "checkbox";
+	/** For selects: known option names (new answer values auto-create options) */
+	options?: string[];
+	/** For selects: normalize raw answer values into comma-free option names */
+	transform?: (value: string) => string;
+}
 
-const TEXT_QUESTIONS = [
-	"Are you a Lorong AI Member?",
-	"Which sector are you from?",
-	"What company/organisation do you work for?",
-	"Job Title (This helps us better understand our audience and plan content that’s most relevant to your team)",
-	"What is your LinkedIn profile?",
-	"How comfortable are you with technical AI concepts?",
-	"Which best describes how you use Notion today?",
-	"What Notion Plan are you on?",
-	"How many employees are in your organisation?",
-	"Tell us what do you expect to learn in this session?",
-	"Have a question for the speaker? Submit it below",
-	"We’re offering an exclusive 3-month trial of Notion Business + Notion AI for organisations with fewer than 100 employees (valued at over $6,000).  To access this offer, please enter your work email below (the domain you’d like us to provision for the trial).",
-	"Terms and Conditions",
-	"What company do you work for?",
-	"Have you used Zapier before?",
-	"Work email address (if different from your Luma user email address)",
-] as const;
+const QUESTIONS: QuestionConfig[] = [
+	{
+		label: "Are you a Lorong AI Member?",
+		property: "Lorong AI Member",
+		kind: "select",
+		options: ["Yes", "No"],
+		// "No, not a Lorong AI Member" → "No"
+		transform: (v) => v.split(",")[0].trim(),
+	},
+	{
+		label: "Which sector are you from?",
+		property: "Sector",
+		kind: "select",
+		options: ["Industry", "Others"],
+	},
+	{
+		label: "What company/organisation do you work for?",
+		property: "Company / Organisation",
+		kind: "text",
+	},
+	{
+		label: "Job Title (This helps us better understand our audience and plan content that’s most relevant to your team)",
+		property: "Job Title",
+		kind: "text",
+	},
+	{
+		label: "What is your LinkedIn profile?",
+		property: "LinkedIn",
+		kind: "text",
+	},
+	{
+		label: "How comfortable are you with technical AI concepts?",
+		property: "AI Comfort Level",
+		kind: "select",
+		options: ["Level 100 - Beginner", "Level 200 - Intermediate", "Level 300 - Advanced"],
+		// "Level 200 - Intermediate: Some technical knowledge. …" → "Level 200 - Intermediate"
+		transform: (v) => v.split(":")[0].trim(),
+	},
+	{
+		label: "Which best describes how you use Notion today?",
+		property: "Notion Usage",
+		kind: "select",
+		options: [
+			"Personal use only",
+			"Exploring / just getting started",
+			"Startup (founder or early team)",
+			"Growing team / scale-up",
+			"Enterprise / large organisation",
+		],
+	},
+	{
+		label: "What Notion Plan are you on?",
+		property: "Notion Plan",
+		kind: "select",
+		options: ["Free", "Plus", "Business", "Enterprise"],
+	},
+	{
+		label: "How many employees are in your organisation?",
+		property: "Organisation Size",
+		kind: "select",
+		options: ["1-10"],
+	},
+	{
+		label: "Tell us what do you expect to learn in this session?",
+		property: "Learning Expectations",
+		kind: "text",
+	},
+	{
+		label: "Have a question for the speaker? Submit it below",
+		property: "Question for Speaker",
+		kind: "text",
+	},
+	{
+		label: "We’re offering an exclusive 3-month trial of Notion Business + Notion AI for organisations with fewer than 100 employees (valued at over $6,000).  To access this offer, please enter your work email below (the domain you’d like us to provision for the trial).",
+		property: "Trial Work Email",
+		kind: "email",
+	},
+	{
+		label: "Terms and Conditions",
+		property: "Terms and Conditions",
+		kind: "text",
+	},
+	{
+		label: "What company do you work for?",
+		property: "Company",
+		kind: "text",
+	},
+	{
+		label: "Have you used Zapier before?",
+		property: "Zapier Experience",
+		kind: "select",
+		options: ["New to Zapier", "Not yet but I'd love to try", "Advanced Zapier user"],
+	},
+	{
+		label: "Work email address (if different from your Luma user email address)",
+		property: "Work Email",
+		kind: "email",
+	},
+	{
+		label: "Stay connected: Add me to the work.flowers mailing list for ops and automation insights, plus news on upcoming events.",
+		property: "Mailing List Opt-in",
+		kind: "checkbox",
+	},
+];
 
-const AGREE_CHECK_SET = new Set<string>(AGREE_CHECK_QUESTIONS);
-const TEXT_SET = new Set<string>(TEXT_QUESTIONS);
+const QUESTIONS_BY_LABEL = new Map(QUESTIONS.map((q) => [q.label, q]));
+
+function questionSchema(q: QuestionConfig) {
+	switch (q.kind) {
+		case "checkbox":
+			return Schema.checkbox();
+		case "email":
+			return Schema.email();
+		case "select":
+			return Schema.select((q.options ?? []).map((name) => ({ name })));
+		default:
+			return Schema.richText();
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Database
@@ -131,14 +237,9 @@ const guests = worker.database("lumaGuests", {
 			"Invited At": Schema.date(),
 			"Joined At": Schema.date(),
 			"Check-in QR Code": Schema.richText(),
-			"ETH Address": Schema.richText(),
-			"Solana Address": Schema.richText(),
 			"UTM Source": Schema.richText(),
 			// registration_answers, one property per question
-			...Object.fromEntries(TEXT_QUESTIONS.map((label) => [label, Schema.richText()])),
-			...Object.fromEntries(
-				AGREE_CHECK_QUESTIONS.map((label) => [label, Schema.checkbox()]),
-			),
+			...Object.fromEntries(QUESTIONS.map((q) => [q.property, questionSchema(q)])),
 			// event_tickets, flattened (monetary fields ignored — events are free)
 			"Ticket Names": Schema.richText(),
 			"Ticket Count": Schema.number(),
@@ -182,12 +283,26 @@ function formatAnswerValue(value: RegistrationAnswerValue): string {
 function answerProperties(answers: RegistrationAnswer[] | null) {
 	const props: Record<string, ReturnType<typeof Builder.richText>> = {};
 	for (const answer of answers ?? []) {
-		if (AGREE_CHECK_SET.has(answer.label)) {
-			props[answer.label] = Builder.checkbox(answer.value === true);
-		} else if (TEXT_SET.has(answer.label)) {
-			props[answer.label] = Builder.richText(truncate(formatAnswerValue(answer.value)));
-		}
+		const q = QUESTIONS_BY_LABEL.get(answer.label);
 		// Unknown questions (added after this schema was generated) are skipped.
+		if (!q) continue;
+		switch (q.kind) {
+			case "checkbox":
+				props[q.property] = Builder.checkbox(answer.value === true);
+				break;
+			case "email":
+				props[q.property] = Builder.email(formatAnswerValue(answer.value));
+				break;
+			case "select": {
+				const raw = formatAnswerValue(answer.value);
+				if (!raw) break;
+				const name = (q.transform ? q.transform(raw) : raw).replace(/,/g, "");
+				props[q.property] = Builder.select(name);
+				break;
+			}
+			default:
+				props[q.property] = Builder.richText(truncate(formatAnswerValue(answer.value)));
+		}
 	}
 	return props;
 }
@@ -240,8 +355,6 @@ function guestToChange(guest: LumaGuest) {
 			...(guest.invited_at ? { "Invited At": Builder.dateTime(guest.invited_at) } : {}),
 			...(guest.joined_at ? { "Joined At": Builder.dateTime(guest.joined_at) } : {}),
 			"Check-in QR Code": Builder.richText(guest.check_in_qr_code ?? ""),
-			"ETH Address": Builder.richText(guest.eth_address ?? ""),
-			"Solana Address": Builder.richText(guest.solana_address ?? ""),
 			"UTM Source": Builder.richText(guest.utm_source ?? ""),
 			...answerProperties(guest.registration_answers),
 			"Ticket Names": Builder.richText(truncate(tickets.map((t) => t.name).join(", "))),
