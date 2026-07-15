@@ -70,6 +70,39 @@ interface ListGuestsResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Registration questions for this event, discovered from the guest list.
+// Each question becomes its own database property (property name = question
+// label). If the event's questions change, update this list and redeploy —
+// answers to unknown questions are skipped.
+// ---------------------------------------------------------------------------
+
+const AGREE_CHECK_QUESTIONS = [
+	"Stay connected: Add me to the work.flowers mailing list for ops and automation insights, plus news on upcoming events.",
+] as const;
+
+const TEXT_QUESTIONS = [
+	"Are you a Lorong AI Member?",
+	"Which sector are you from?",
+	"What company/organisation do you work for?",
+	"Job Title (This helps us better understand our audience and plan content that’s most relevant to your team)",
+	"What is your LinkedIn profile?",
+	"How comfortable are you with technical AI concepts?",
+	"Which best describes how you use Notion today?",
+	"What Notion Plan are you on?",
+	"How many employees are in your organisation?",
+	"Tell us what do you expect to learn in this session?",
+	"Have a question for the speaker? Submit it below",
+	"We’re offering an exclusive 3-month trial of Notion Business + Notion AI for organisations with fewer than 100 employees (valued at over $6,000).  To access this offer, please enter your work email below (the domain you’d like us to provision for the trial).",
+	"Terms and Conditions",
+	"What company do you work for?",
+	"Have you used Zapier before?",
+	"Work email address (if different from your Luma user email address)",
+] as const;
+
+const AGREE_CHECK_SET = new Set<string>(AGREE_CHECK_QUESTIONS);
+const TEXT_SET = new Set<string>(TEXT_QUESTIONS);
+
+// ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
 
@@ -101,7 +134,11 @@ const guests = worker.database("lumaGuests", {
 			"ETH Address": Schema.richText(),
 			"Solana Address": Schema.richText(),
 			"UTM Source": Schema.richText(),
-			"Registration Answers": Schema.richText(),
+			// registration_answers, one property per question
+			...Object.fromEntries(TEXT_QUESTIONS.map((label) => [label, Schema.richText()])),
+			...Object.fromEntries(
+				AGREE_CHECK_QUESTIONS.map((label) => [label, Schema.checkbox()]),
+			),
 			// event_tickets, flattened (monetary fields ignored — events are free)
 			"Ticket Names": Schema.richText(),
 			"Ticket Count": Schema.number(),
@@ -142,13 +179,17 @@ function formatAnswerValue(value: RegistrationAnswerValue): string {
 	return [value.company, value.job_title].filter(Boolean).join(" — ");
 }
 
-function formatRegistrationAnswers(answers: RegistrationAnswer[] | null): string {
-	if (!answers || answers.length === 0) return "";
-	return truncate(
-		answers
-			.map((a) => `${a.label}: ${formatAnswerValue(a.value)}`)
-			.join("\n"),
-	);
+function answerProperties(answers: RegistrationAnswer[] | null) {
+	const props: Record<string, ReturnType<typeof Builder.richText>> = {};
+	for (const answer of answers ?? []) {
+		if (AGREE_CHECK_SET.has(answer.label)) {
+			props[answer.label] = Builder.checkbox(answer.value === true);
+		} else if (TEXT_SET.has(answer.label)) {
+			props[answer.label] = Builder.richText(truncate(formatAnswerValue(answer.value)));
+		}
+		// Unknown questions (added after this schema was generated) are skipped.
+	}
+	return props;
 }
 
 async function fetchGuestsPage(cursor: string | undefined): Promise<ListGuestsResponse> {
@@ -202,9 +243,7 @@ function guestToChange(guest: LumaGuest) {
 			"ETH Address": Builder.richText(guest.eth_address ?? ""),
 			"Solana Address": Builder.richText(guest.solana_address ?? ""),
 			"UTM Source": Builder.richText(guest.utm_source ?? ""),
-			"Registration Answers": Builder.richText(
-				formatRegistrationAnswers(guest.registration_answers),
-			),
+			...answerProperties(guest.registration_answers),
 			"Ticket Names": Builder.richText(truncate(tickets.map((t) => t.name).join(", "))),
 			"Ticket Count": Builder.number(tickets.length),
 			"Ticket IDs": Builder.richText(truncate(tickets.map((t) => t.id).join(", "))),
