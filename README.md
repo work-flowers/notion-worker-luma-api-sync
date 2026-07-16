@@ -2,7 +2,7 @@
 
 A [Notion Worker](https://developers.notion.com/workers/get-started/overview.md) that syncs the guest list of a single [Luma](https://luma.com) event into a Notion database.
 
-Every 15 minutes, the `lumaGuestsSync` capability pulls all guests from Luma's [List Guests endpoint](https://docs.luma.com) (`GET /v1/events/guests/list`) and writes them to a Worker-managed database titled **Luma Guests**, keyed on Guest ID. The sync runs in replace mode, so guests removed upstream are also removed from Notion.
+Every 5 minutes, the `lumaGuestsSync` capability pulls all guests from Luma's [List Guests endpoint](https://docs.luma.com) (`GET /v1/events/guests/list`) and writes them to a Worker-managed database titled **Luma Guests**, keyed on Guest ID. The sync runs in replace mode, so guests removed upstream are also removed from Notion.
 
 ## What gets synced
 
