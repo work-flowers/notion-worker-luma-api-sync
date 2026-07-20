@@ -77,7 +77,15 @@ interface ListGuestsResponse {
 // ---------------------------------------------------------------------------
 
 interface QuestionConfig {
-	/** Luma question label, matched against registration_answers[].label */
+	/**
+	 * Luma question_id, matched against registration_answers[].question_id.
+	 * This is stable even when the host edits the question's label text on
+	 * Luma — matching on label was tried first and broke silently when a
+	 * label changed (e.g. "Work email address (if different…)" became
+	 * "Work email address"). `label` below is just documentation of the
+	 * label seen when this entry was added.
+	 */
+	id: string;
 	label: string;
 	/** Trimmed Notion property name */
 	property: string;
@@ -90,6 +98,7 @@ interface QuestionConfig {
 
 const QUESTIONS: QuestionConfig[] = [
 	{
+		id: "kawta95l",
 		label: "Are you a Lorong AI Member?",
 		property: "Lorong AI Member",
 		kind: "select",
@@ -98,27 +107,32 @@ const QUESTIONS: QuestionConfig[] = [
 		transform: (v) => v.split(",")[0].trim(),
 	},
 	{
+		id: "i0iqhrw5",
 		label: "Which sector are you from?",
 		property: "Sector",
 		kind: "select",
 		options: ["Industry", "Others"],
 	},
 	{
+		id: "qqr9rkjw",
 		label: "What company/organisation do you work for?",
 		property: "Company / Organisation",
 		kind: "text",
 	},
 	{
+		id: "su9ok15m",
 		label: "Job Title (This helps us better understand our audience and plan content that’s most relevant to your team)",
 		property: "Job Title",
 		kind: "text",
 	},
 	{
+		id: "zlerqfau",
 		label: "What is your LinkedIn profile?",
 		property: "LinkedIn",
 		kind: "text",
 	},
 	{
+		id: "9z2p5mzl",
 		label: "How comfortable are you with technical AI concepts?",
 		property: "AI Comfort Level",
 		kind: "select",
@@ -127,6 +141,7 @@ const QUESTIONS: QuestionConfig[] = [
 		transform: (v) => v.split(":")[0].trim(),
 	},
 	{
+		id: "5r9frc11",
 		label: "Which best describes how you use Notion today?",
 		property: "Notion Usage",
 		kind: "select",
@@ -139,61 +154,71 @@ const QUESTIONS: QuestionConfig[] = [
 		],
 	},
 	{
+		id: "vr76cwjp",
 		label: "What Notion Plan are you on?",
 		property: "Notion Plan",
 		kind: "select",
 		options: ["Free", "Plus", "Business", "Enterprise"],
 	},
 	{
+		id: "r3ph3isc",
 		label: "How many employees are in your organisation?",
 		property: "Organisation Size",
 		kind: "select",
 		options: ["1-10"],
 	},
 	{
+		id: "6cqmgrww",
 		label: "Tell us what do you expect to learn in this session?",
 		property: "Learning Expectations",
 		kind: "text",
 	},
 	{
+		id: "wi9mbi0g",
 		label: "Have a question for the speaker? Submit it below",
 		property: "Question for Speaker",
 		kind: "text",
 	},
 	{
+		id: "vuqs8hzv",
 		label: "We’re offering an exclusive 3-month trial of Notion Business + Notion AI for organisations with fewer than 100 employees (valued at over $6,000).  To access this offer, please enter your work email below (the domain you’d like us to provision for the trial).",
 		property: "Trial Work Email",
 		kind: "email",
 	},
 	{
+		id: "p8um6bnr",
 		label: "Terms and Conditions",
 		property: "Terms and Conditions",
 		kind: "text",
 	},
 	{
+		id: "ntkrkind",
 		label: "What company do you work for?",
 		property: "Company",
 		kind: "text",
 	},
 	{
+		id: "e0bfqfa6",
 		label: "Have you used Zapier before?",
 		property: "Zapier Experience",
 		kind: "select",
 		options: ["New to Zapier", "Not yet but I'd love to try", "Advanced Zapier user"],
 	},
 	{
+		id: "dm3lhgtm",
 		label: "Work email address (if different from your Luma user email address)",
 		property: "Work Email",
 		kind: "email",
 	},
 	{
+		id: "91a16oco",
 		label: "Stay connected: Add me to the work.flowers mailing list for ops and automation insights, plus news on upcoming events.",
 		property: "Mailing List Opt-in",
 		kind: "checkbox",
 	},
 ];
 
-const QUESTIONS_BY_LABEL = new Map(QUESTIONS.map((q) => [q.label, q]));
+const QUESTIONS_BY_ID = new Map(QUESTIONS.map((q) => [q.id, q]));
 
 function questionSchema(q: QuestionConfig) {
 	switch (q.kind) {
@@ -283,7 +308,7 @@ function formatAnswerValue(value: RegistrationAnswerValue): string {
 function answerProperties(answers: RegistrationAnswer[] | null) {
 	const props: Record<string, ReturnType<typeof Builder.richText>> = {};
 	for (const answer of answers ?? []) {
-		const q = QUESTIONS_BY_LABEL.get(answer.label);
+		const q = QUESTIONS_BY_ID.get(answer.question_id);
 		// Unknown questions (added after this schema was generated) are skipped.
 		if (!q) continue;
 		switch (q.kind) {

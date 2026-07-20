@@ -17,7 +17,7 @@ All fields returned by the list-guests endpoint:
 | Registered At, Invited At, Joined At | `registered_at`, `invited_at`, `joined_at` |
 | Check-in QR Code, UTM Source | `check_in_qr_code`, `utm_source` |
 
-**Registration answers** (`registration_answers`) are flattened into one property per question. The mapping lives in the `QUESTIONS` config in [src/index.ts](src/index.ts): question labels are trimmed into short property names (e.g. "Have you used Zapier before?" → **Zapier Experience**), dropdown questions become select properties, email-shaped questions become email properties, and the mailing-list opt-in becomes a checkbox. Comma-laden dropdown values are normalized into valid select option names ("No, not a Lorong AI Member" → "No").
+**Registration answers** (`registration_answers`) are flattened into one property per question. The mapping lives in the `QUESTIONS` config in [src/index.ts](src/index.ts), keyed on Luma's `question_id` (not the label text — Luma lets hosts edit a question's wording without changing its ID, and label-based matching silently dropped answers when that happened). Each question gets a short property name (e.g. "Have you used Zapier before?" → **Zapier Experience**), dropdown questions become select properties, email-shaped questions become email properties, and the mailing-list opt-in becomes a checkbox. Comma-laden dropdown values are normalized into valid select option names ("No, not a Lorong AI Member" → "No").
 
 **Event tickets** (`event_tickets`) are flattened into: Ticket Names, Ticket Count, Ticket IDs, Ticket Type IDs, Checked In (checkbox), Checked In At (earliest check-in), and Tickets Captured. Monetary fields (`amount`, `amount_discount`, `amount_tax`, `currency`) are intentionally ignored — our events are free.
 
@@ -60,5 +60,5 @@ Luma allows 200 requests/minute per calendar API key. The worker declares a pace
 ## Changing the event or its questions
 
 - **Different event**: update `LUMA_EVENT_ID`, then reset sync state and trigger. If the new event has different registration questions, update the `QUESTIONS` config to match.
-- **Questions added or reworded on the event**: answers whose labels aren't in `QUESTIONS` are skipped. Add the new label (with a trimmed property name and kind) to the config and redeploy.
+- **Questions added on the event**: answers whose `question_id` isn't in `QUESTIONS` are skipped. Add the new question (find its `question_id` via a preview or the `find-guest`-style script) to the config and redeploy. Reworded questions need no change — matching is by ID, not label text.
 - Old columns left behind by schema changes can be deleted from the Notion database by hand — the sync no longer writes to them.
